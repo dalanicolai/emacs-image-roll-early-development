@@ -1,0 +1,2 @@
+# papyrus.el
+Simplified book rendering engine
