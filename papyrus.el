@@ -18,17 +18,31 @@
 (defmacro papyrus-overlays (&optional window)
   `(image-mode-window-get 'overlays ,window))
 
+(defmacro papyrus-current-page (&optional window)
+  ;;TODO: write documentation!
+  `(image-mode-window-get 'page ,window))
+
 (defmacro papyrus-page-overlay (page)
   `(nth (* 2 (1- ,page)) (papyrus-overlays)))
-
-(defmacro papyrus-page-overlay-get (page prop)
-  `(overlay-get (nth (* 2 (1- ,page)) (papyrus-overlays)) ,prop))
 
 (defmacro papyrus-gap-overlay (page)
   `(nth (+ (* 2 (1- ,page)) 1) (papyrus-overlays)))
 
+(defmacro papyrus-page-overlay-get (page prop)
+  `(overlay-get (nth (* 2 (1- ,page)) (papyrus-overlays)) ,prop))
+
+(defmacro papyrus-relative-vscroll (&optional window)
+  `(image-mode-window-get 'relative-vscroll ,window))
+
 (defun papyrus-window-end-vpos ()
   (+ (window-vscroll nil t) (window-text-height nil t)))
+
+(defun papyrus-vscroll-to-relative (vpos)
+  (/ (float (- (window-vscroll nil t) (car vpos)))
+     (- (cdr vpos) (car vpos))))
+
+(defun papyrus-relative-to-vscroll (vpos)
+  (* (or (papyrus-relative-vscroll) 0) (- (cdr vpos) (car vpos))))
 
 (defun papyrus-visible-overlays ()
   (let* (visible
@@ -38,9 +52,9 @@
          (overlays (papyrus-overlays)))
     (while overlays
       (let* ((o (car overlays))
-             (vregion (overlay-get o 'vregion))
-             (pstart (car vregion))
-             (pend (cdr vregion)))
+             (vpos (overlay-get o 'vpos))
+             (pstart (car vpos))
+             (pend (cdr vpos)))
         (when (and (<= pstart wstart)
                    (> pend wstart))
           (setq flag t))
@@ -141,36 +155,47 @@
              (o (nth m (papyrus-overlays))))
         (overlay-put o 'display `(space . (:width (,w) :height (,h))))
         (overlay-put o 'face `(background-color . "gray"))
-        (overlay-put o 'vregion (cons vpos (setq vpos (+ vpos h))))
+        (overlay-put o 'vpos (cons vpos (setq vpos (+ vpos h))))
 
+        ;; don't add gap after last page
         (unless (= n (1- (length page-sizes)))
           (setq o (nth (1+ m) (papyrus-overlays)))
           (overlay-put o 'display
                        `(space . (:width (,w) :height (,papyrus-gap-height))))
           (overlay-put o 'face `(background-color . "gray"))
-          (overlay-put o 'vregion (cons vpos (setq vpos (+ vpos papyrus-gap-height))))
+          (overlay-put o 'vpos (cons vpos (setq vpos (+ vpos papyrus-gap-height))))
 
           (setq n (+ n 1))))))
-  (let ((current-page (car (image-mode-window-get 'displayed-pages))))
-    (when current-page
-      (image-set-window-vscroll (car (papyrus-page-overlay-get current-page 'vregion)))))
+  ;; (let ((current-page (car (image-mode-window-get 'displayed-pages))))
+  (image-set-window-vscroll (let* ((p (papyrus-current-page))
+                                   (vposition (papyrus-page-overlay-get
+                                               (or p (progn (setf (papyrus-current-page) 1) 1))
+                                               'vpos)))
+                              (+ (car vposition )
+                                 (papyrus-relative-to-vscroll vposition))))
   (let (displayed)
     (dolist (o (papyrus-visible-overlays))
       (papyrus-display-page o)
       (push o displayed))
-    (image-mode-window-put 'page (car (last displayed))) ; TODO check if possible to use 'displayed-pages
+    ;; (image-mode-window-put 'page (car (last displayed))) ; TODO check if possible to use 'displayed-pages
     (image-mode-window-put 'displayed-pages (reverse displayed))
-    (image-mode-window-put 'visible-range (cons (papyrus-page-overlay-get (car (last displayed)) 'vregion)
-                                                (papyrus-page-overlay-get (car displayed) 'vregion)))))
+    (image-mode-window-put 'visible-range (cons (papyrus-page-overlay-get (car (last displayed)) 'vpos)
+                                                (papyrus-page-overlay-get (car displayed) 'vpos)))))
 
 (defun papyrus-demo-scroll-forward (&optional backward)
   (interactive)
-  (image-set-window-vscroll (funcall (if backward '- '+) (window-vscroll nil t) papyrus-step-size))
-  (let ((visible-range (image-mode-window-get 'visible-range)))
-    (when (or (funcall (if backward '< '>)
-                       (window-vscroll nil t) (if backward
-                                                  (caar visible-range)
-                                                (cdar visible-range)))
+  (let ((new-vscroll (image-set-window-vscroll (funcall (if backward '- '+)
+                                                        (window-vscroll nil t)
+                                                        papyrus-step-size)))
+        (visible-range (image-mode-window-get 'visible-range)))
+    (when (or (progn
+                (when (funcall (if backward '< '>)
+                               new-vscroll (if backward
+                                               (caar visible-range)
+                                             (cdar visible-range)))
+                  (if backward
+                      (cl-decf (papyrus-current-page))
+                    (cl-incf (papyrus-current-page)))))
               (funcall (if backward '< '>)
                        (papyrus-window-end-vpos) (if backward
                                                      (- (cadr visible-range) papyrus-gap-height)
@@ -183,8 +208,10 @@
         (when-let (d (car (cl-set-difference new old)))
           (papyrus-display-page d)
           (image-mode-window-put 'displayed-pages (append old (list d))))
-        (image-mode-window-put 'visible-range (cons (papyrus-page-overlay-get (car new) 'vregion)
-                                                    (papyrus-page-overlay-get (car (last new)) 'vregion)))))))
+        (image-mode-window-put 'visible-range (cons (papyrus-page-overlay-get (car new) 'vpos)
+                                                    (papyrus-page-overlay-get (car (last new)) 'vpos)))))
+    (setf (papyrus-relative-vscroll) (papyrus-vscroll-to-relative
+                                      (papyrus-page-overlay-get (papyrus-current-page) 'vpos)))))
 
 (defun papyrus-demo-scroll-backward ()
   (interactive)
