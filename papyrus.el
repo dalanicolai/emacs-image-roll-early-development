@@ -14,6 +14,12 @@
   :group 'papyrus
   :type 'integer)
 
+(defvar-local papyrus-display-page 'papyrus-demo-display-page
+  "Function that sets the overlay's display property.
+The function receives the page number as a single
+argument (PAGE). The function should use `(papyrus-page-overlay
+PAGE)' to add the image of the page as the overlay's
+display-property.")
 ;; implement as macro's for setf-ability
 (defmacro papyrus-overlays (&optional window)
   `(image-mode-window-get 'overlays ,window))
@@ -67,7 +73,9 @@
           (push (overlay-get o 'page) visible))))
     (nreverse visible)))
 
-(defun papyrus-display-page (page)
+(defun papyrus-demo-display-page (page)
+  "Return demo image of page.
+This function is used for the papyrus-demo."
   (let* ((o (papyrus-page-overlay page))
          (s (cdr (overlay-get o 'display)))
          (w (car (plist-get s :width)))
@@ -174,13 +182,14 @@
                               (+ (car vposition )
                                  (papyrus-relative-to-vscroll vposition))))
   (let (displayed)
-    (dolist (o (papyrus-visible-overlays))
-      (papyrus-display-page o)
-      (push o displayed))
+    (dolist (p (papyrus-visible-overlays))
+      (funcall papyrus-display-page p)
+      (push p displayed))
     ;; (image-mode-window-put 'page (car (last displayed))) ; TODO check if possible to use 'displayed-pages
     (image-mode-window-put 'displayed-pages (reverse displayed))
     (image-mode-window-put 'visible-range (cons (papyrus-page-overlay-get (car (last displayed)) 'vpos)
                                                 (papyrus-page-overlay-get (car displayed) 'vpos)))))
+      (funcall papyrus-display-page p)
 
 (defun papyrus-demo-scroll-forward (&optional backward)
   (interactive)
@@ -206,8 +215,8 @@
           (papyrus-undisplay-page d)
           (image-mode-window-put 'displayed-pages (delete d old)))
         (when-let (d (car (cl-set-difference new old)))
-          (papyrus-display-page d)
           (image-mode-window-put 'displayed-pages (append old (list d))))
+          (funcall papyrus-display-page p)
         (image-mode-window-put 'visible-range (cons (papyrus-page-overlay-get (car new) 'vpos)
                                                     (papyrus-page-overlay-get (car (last new)) 'vpos)))))
     (setf (papyrus-relative-vscroll) (papyrus-vscroll-to-relative
