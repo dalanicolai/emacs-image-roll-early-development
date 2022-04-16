@@ -421,6 +421,14 @@ each overlay."
 	;;           #'image-mode-reapply-winprops nil t))
   ;; (image-mode-setup-winprops))
 
+(setq papyrus-demo-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "<down>") 'papyrus-scroll-forward)
+    (define-key map (kbd "<up>") 'papyrus-scroll-backward)
+    (define-key map (kbd "<next>") 'papyrus-next-page)
+    (define-key map (kbd "<prior>") 'papyrus-previous-page)
+    map))
+
 (when (featurep 'evil)
   (evil-define-key 'motion papyrus-demo-mode-map
     "j" 'papyrus-scroll-forward
