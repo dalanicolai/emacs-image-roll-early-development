@@ -257,6 +257,7 @@ each overlay."
                 (push go overlays)
                 (insert (propertize "\n" 'face '(:height 1)))))))
         (image-mode-window-put 'overlays (nreverse overlays))
+        (set-buffer-modified-p nil)
         ;; we must put the cursor at the `point-min' for the vscroll
         ;; functionality to work. It is only required here because we will never
         ;; move the cursor (we will merely update overlay properties)
