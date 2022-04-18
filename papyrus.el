@@ -292,10 +292,19 @@ each overlay."
       ;; the the `window-configuration-change-hook' to get called
       ;; (papyrus--redisplay))))
 
-;; TODO find out why redisplay does not work when image height gets smaller than
-;; window height (e.g. using `pdf-view-shrink'). Some unexpected behavior occurs
-;; and it is not obvious to find why.
-(defun papyrus--redisplay (&optional window relative-vscroll)
+(defun papyrus--redisplay (&optional window no-relative-vscroll)
+  "Redisplay the scroll.
+Besides that this function can be called directly, it should also
+be added to the `window-configuration-change-hook'.
+
+The argument WINDOW is not use in the body, but it exists to make
+the function compatible with `pdf-tools' (in which case is a
+substitute for `pdf-view-redisplay').
+
+When NO-RELATIVE-SCROLL is non-nil, then the relative-scroll is
+not included when setting teh vscroll position. For example this
+is used in `pdf-view-goto-page' (in the `pdf-scroll.el'
+extension) to make it scroll to the start of the page."
   (display-warning '(papyrus) (format "redisplay %s" (car (image-mode-winprops))) :debug "*papyrus-debug-log*")
 
   ;; NOTE the `(when (listp image-mode-winprops-alist)' from
@@ -342,7 +351,7 @@ each overlay."
                                                (or p (progn (setf (papyrus-current-page) 1) 1))
                                                'vpos)))
                               (+ (car vposition )
-                                 (papyrus-relative-to-vscroll (unless relative-vscroll vposition)))))
+                                 (papyrus-relative-to-vscroll (unless no-relative-vscroll vposition)))))
   (let (displayed)
     (dolist (p (papyrus-visible-overlays))
       (funcall papyrus-display-page p)
