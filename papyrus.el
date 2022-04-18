@@ -379,11 +379,13 @@ each overlay."
 ;; `papyrus-visible-overlays' is a costly function, we don't compare on each
 ;; step, but we only compare after the buffer is scrolled to outside the
 ;; `visible-range' which is the vscroll range of the currently displayed pages.
-(defun papyrus-scroll-forward (&optional backward)
+(defun papyrus-scroll-forward (&optional backward screen)
   (interactive)
   (let ((new-vscroll (papyrus-set-window-vscroll (funcall (if backward '- '+)
                                                         (window-vscroll nil t)
-                                                        papyrus-step-size)))
+                                                        (if screen
+                                                            (window-text-height nil t)
+                                                          papyrus-step-size))))
         (visible-range (image-mode-window-get 'visible-range)))
     (when (or (progn
                 (when (funcall (if backward '< '>)
@@ -417,6 +419,14 @@ each overlay."
   (interactive)
   (papyrus-scroll-forward t))
 
+(defun papyrus-next-screen ()
+  (interactive)
+  (papyrus-scroll-forward nil t))
+
+(defun papyrus-previous-screen ()
+  (interactive)
+  (papyrus-scroll-forward t t))
+
 (define-derived-mode papyrus-demo-mode special-mode "Papyrus"
   ;; we don't use `(image-mode-setup-winprops)' because it would additionally
   ;; add `image-mode-reapply-winprops' to the
@@ -438,6 +448,8 @@ each overlay."
     (define-key map (kbd "<up>") 'papyrus-scroll-backward)
     (define-key map (kbd "<next>") 'papyrus-next-page)
     (define-key map (kbd "<prior>") 'papyrus-previous-page)
+    (define-key map (kbd "S-<next>") 'papyrus-next-screen)
+    (define-key map (kbd "S-<prior>") 'papyrus-previous-screen)
     map))
 
 (when (featurep 'evil)
@@ -445,7 +457,9 @@ each overlay."
     "j" 'papyrus-scroll-forward
     "k" 'papyrus-scroll-backward
     "J" 'papyrus-next-page
-    "K" 'papyrus-previous-page))
+    "K" 'papyrus-previous-page
+    (kbd "C-S-j") 'papyrus-next-screen
+    (kbd "C-S-k") 'papyrus-previous-screen))
 
 (defun papyrus-demo ()
   (interactive)
