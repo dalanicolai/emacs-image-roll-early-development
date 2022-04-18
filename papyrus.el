@@ -140,6 +140,16 @@ Implemented as macro to make it setf'able."
   "Get vscroll from start of the page as a page fraction."
   `(image-mode-window-get 'relative-vscroll ,window))
 
+(defun papyrus-set-window-vscroll (vscroll)
+  (let ((max-vscroll (- (cdr (overlay-get (car (last (papyrus-overlays))) 'vpos))
+                        (window-text-height nil t))))
+    (cond ((> vscroll max-vscroll)
+           (set-window-vscroll (selected-window) max-vscroll t)
+           (user-error "End of document"))
+          (t
+           (setf (image-mode-window-get 'vscroll) vscroll)
+           (set-window-vscroll (selected-window) vscroll t)))))
+
 (defun papyrus-window-end-vpos ()
   "Return vscroll position corresponding with end of window.
 I.e. window-vscroll plus window-text-height in pixels."
@@ -322,7 +332,7 @@ each overlay."
 
           (setq n (+ n 1))))))
   ;; (let ((current-page (car (image-mode-window-get 'displayed-pages))))
-  (image-set-window-vscroll (let* ((p (papyrus-current-page))
+  (papyrus-set-window-vscroll (let* ((p (papyrus-current-page))
                                    (vposition (papyrus-page-overlay-get
                                                (or p (progn (setf (papyrus-current-page) 1) 1))
                                                'vpos)))
@@ -342,7 +352,7 @@ each overlay."
   (let* ((vpos (papyrus-page-overlay-get (papyrus-current-page) 'vpos))
          (beg (car vpos))
          (end (cdr vpos)))
-    (image-set-window-vscroll (funcall (if backward '- '+)
+    (papyrus-set-window-vscroll (funcall (if backward '- '+)
                                        (window-vscroll nil t)
                                        (- end beg)
                                        papyrus-gap-height)))
@@ -371,7 +381,7 @@ each overlay."
 ;; `visible-range' which is the vscroll range of the currently displayed pages.
 (defun papyrus-scroll-forward (&optional backward)
   (interactive)
-  (let ((new-vscroll (image-set-window-vscroll (funcall (if backward '- '+)
+  (let ((new-vscroll (papyrus-set-window-vscroll (funcall (if backward '- '+)
                                                         (window-vscroll nil t)
                                                         papyrus-step-size)))
         (visible-range (image-mode-window-get 'visible-range)))
