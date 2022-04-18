@@ -106,6 +106,12 @@ HEIGHT), both numbers.")
 
 (defvar-local papyrus-set-redisplay-flag-function nil)
 
+(defvar-local papyrus-demo-page-size (let ((h (window-text-height nil t)))
+                                       (cons (/ (float h) 1.4) h))
+  "Page size in papyrus-demo.
+The value should be a cons of the form (WIDTH . HEIGHT) with
+WIDTH and HEIGHT both integers.")
+
 ;; implement as macro's for setf-ability
 (defmacro papyrus-overlays (&optional window)
   "List of overlays that make up a scroll.
@@ -305,8 +311,7 @@ each overlay."
          ;;                                    (* 1.4 (window-text-width nil t)))))
          (page-sizes (if papyrus-page-sizes-function
                          (funcall papyrus-page-sizes-function)
-                       (let ((h (window-text-height nil t)))
-                         (make-list pages (cons (/ (float h) 1.4) h)))))
+                       (make-list pages papyrus-demo-page-size)))
                        ;; (let ((w (window-pixel-width)))
                        ;;   (make-list pages (cons w (* 1.4 w))))))
 
@@ -401,14 +406,14 @@ each overlay."
                                                    (+ (cddr visible-range) papyrus-gap-height))))
       (let ((old (image-mode-window-get 'displayed-pages))
             (new (papyrus-visible-overlays)))
-        (when-let (p (car (cl-set-difference old new)))
+        (dolist (p (cl-set-difference old new))
           (papyrus-undisplay-page p)
           (image-mode-window-put 'displayed-pages
                                  (setq old (delete p old)))) ;; important to update/setq old before
                                                              ;; setting/appending new below
-        (when-let (p (car (cl-set-difference new old)))
+        (dolist (p (cl-set-difference new old))
           (funcall papyrus-display-page p)
-          (image-mode-window-put 'displayed-pages (append old (list p))))
+          (image-mode-window-put 'displayed-pages (setq old (append old (list p)))))
         ;; update also visible-range
         (image-mode-window-put 'visible-range (cons (papyrus-page-overlay-get (car new) 'vpos)
                                                     (papyrus-page-overlay-get (car (last new)) 'vpos)))))
@@ -461,12 +466,13 @@ each overlay."
     (kbd "C-S-j") 'papyrus-next-screen
     (kbd "C-S-k") 'papyrus-previous-screen))
 
-(defun papyrus-demo ()
+(defun papyrus-demo (&optional page-size)
   (interactive)
   (with-current-buffer (get-buffer-create "*papyrus-demo*")
-    (setq cursor-type nil)
     (erase-buffer)
     (papyrus-demo-mode)
+    (setq cursor-type nil)
+    (when page-size (setq papyrus-demo-page-size page-size))
     (switch-to-buffer (current-buffer))))
 
 (provide 'papyrus)
