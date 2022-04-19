@@ -81,21 +81,27 @@
 ;; `image-roll-set-window-vscroll' form in the `image-roll--redisplay'
 ;; function).
 
+
 ;;; Code:
 
 (require 'image-mode)
 (require 'svg)
 ;; (require 'cl-lib) ; required already in svg library
 
+(defgroup image-roll nil
+  "Image roll configurations.")
+
 (defcustom image-roll-step-size 50
   "Scroll step size in pixels."
-  :group 'image-roll
   :type 'integer)
 
 (defcustom image-roll-gap-height 2
   "Page gap height."
-  :group 'image-roll
   :type 'integer)
+
+(defcustom image-roll-center nil
+  "When non-nil then center the roll horizontally in the window."
+  :type 'boolean)
 
 (defvar-local image-roll-number-of-pages-function nil
   "Function that should return the total number of pages.
@@ -116,11 +122,13 @@ display-property.")
 
 (defvar-local image-roll-set-redisplay-flag-function nil)
 
-(defvar-local image-roll-demo-page-size (let ((h (window-text-height nil t)))
-                                          (cons (/ (float h) 1.4) h))
+(defvar-local image-roll-demo-page-size (lambda ()
+                                          (let ((h (window-text-height nil t)))
+                                            (cons (/ (float h) 1.4) h)))
   "Page size in image-roll-demo.
-The value should be a cons of the form (WIDTH . HEIGHT) with
-WIDTH and HEIGHT both integers.")
+The value should either be a cons of the form (WIDTH . HEIGHT)
+with WIDTH and HEIGHT both integers, or a function that return a
+cons of that specified form.")
 
 ;; define as macro's for setf-ability
 (defmacro image-roll-overlays (&optional window)
@@ -160,8 +168,9 @@ Implemented as macro to make it setf'able."
 ;; document' when trying to scroll beyond the end of the document (it scrolls to
 ;; the end of the document instead.)
 (defun image-roll-set-window-vscroll (vscroll)
-  (let ((max-vscroll (- (cdr (overlay-get (car (last (image-roll-overlays))) 'vpos))
-                        (window-text-height nil t))))
+  (let* ((roll-length (cdr (overlay-get (car (last (image-roll-overlays))) 'vpos)))
+         (max-vscroll (- roll-length
+                         (window-text-height nil t))))
     (cond ((> vscroll max-vscroll)
            (set-window-vscroll (selected-window) max-vscroll t)
            (user-error "End of document"))
@@ -272,7 +281,7 @@ each overlay."
         (set-buffer-modified-p nil)
         ;; we must put the cursor at the `point-min' for the vscroll
         ;; functionality to work. It is only required here because we will never
-        ;; move the cursor (we will merely update overlay properties)
+        ;; move the cursor (we will merely update overlay properties and vscroll)
         (goto-char (point-min))
         ;; required to make `pdf-view-redisplay-some-windows' call `pdf-view-redisplay'
         (when-let (fun image-roll-set-redisplay-flag-function)
@@ -316,7 +325,9 @@ extension) to make it scroll to the start of the page."
          ;;                                    (* 1.4 (window-text-width nil t)))))
          (page-sizes (if image-roll-page-sizes-function
                          (funcall image-roll-page-sizes-function)
-                       (make-list pages image-roll-demo-page-size)))
+                       (make-list pages (if (functionp image-roll-demo-page-size)
+                                            (funcall image-roll-demo-page-size)
+                                          image-roll-demo-page-size))))
          ;; (let ((w (window-pixel-width)))
          ;;   (make-list pages (cons w (* 1.4 w))))))
 
@@ -328,6 +339,12 @@ extension) to make it scroll to the start of the page."
              (h (cdr s))
              (m (* 2 n))
              (o (nth m (image-roll-overlays))))
+        (when image-roll-center
+          (overlay-put o 'before-string
+                       (when (> (window-pixel-width) w)
+                         (propertize " " 'display
+                                     `(space :align-to
+                                             (,(floor (/ (- (window-pixel-width) w) 2))))))))
         (overlay-put o 'display `(space . (:width (,w) :height (,h))))
         (overlay-put o 'face `(:background "gray"))
         (overlay-put o 'vpos (cons vpos (setq vpos (+ vpos h))))
@@ -335,6 +352,12 @@ extension) to make it scroll to the start of the page."
         ;; don't add gap after last page
         (unless (= n (1- (length page-sizes)))
           (setq o (nth (1+ m) (image-roll-overlays)))
+          (when image-roll-center
+            (overlay-put o 'before-string
+                         (when (> (window-pixel-width) w)
+                           (propertize " " 'display
+                                       `(space :align-to
+                                               (,(floor (/ (- (window-pixel-width) w) 2))))))))
           (overlay-put o 'display
                        `(space . (:width (,w) :height (,image-roll-gap-height))))
           (overlay-put o 'face `(:background "gray"))
@@ -458,6 +481,12 @@ This function is used for the image-roll-demo."
               :fill "black"
               :x 20
               :y 50)
+    (when image-roll-center
+      (overlay-put o 'before-string
+                   (when (> (window-pixel-width) w)
+                     (propertize " " 'display
+                                 `(space :align-to
+                                         (,(floor (/ (- (window-pixel-width) w) 2))))))))
     (overlay-put o 'display (svg-image svg))))
 
 (define-derived-mode image-roll-mode special-mode "Papyrus"
@@ -491,8 +520,8 @@ This function is used for the image-roll-demo."
     "k" 'image-roll-scroll-backward
     "J" 'image-roll-next-page
     "K" 'image-roll-previous-page
-    (kbd "C-S-j") 'image-roll-next-screen
-    (kbd "C-S-k") 'image-roll-previous-screen))
+    (kbd "C-j") 'image-roll-next-screen
+    (kbd "C-k") 'image-roll-previous-screen))
 
 (defun image-roll-demo (&optional page-size)
   (interactive)
@@ -501,6 +530,7 @@ This function is used for the image-roll-demo."
     (image-roll-mode)
     (setq cursor-type nil)
     (when page-size (setq image-roll-demo-page-size page-size))
+    (setq image-roll-center t)
     (switch-to-buffer (current-buffer))))
 
 ;;; Directory image roll
